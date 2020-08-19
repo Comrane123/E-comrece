@@ -1,12 +1,14 @@
+import stripe
+
 from django.db import transaction
 from django.shortcuts import render
 from django.contrib.contenttypes.models import ContentType
 from django.contrib import messages
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
 from django.views.generic import DetailView, View
 
 from .models import (Notebook, Smartphone, Category, LatestProducts,
-                     Customer, Cart, CartProduct)
+                     Customer, Cart, CartProduct, Order)
 from .mixins import CategoryDetailMixin, CartMixin
 from .forms import OrderForm
 from .utils import recalc_cart
@@ -121,12 +123,21 @@ class CartView(CartMixin, View):
 class CheckoutView(CartMixin, View):
 
     def get(self, request, *args, **kwargs):
+        stripe.api_key = 'sk_test_51HHvkTJvmisgK0uTBsujrvJaWpQAmuNkBuye5ojsKEqKuWu34w4L7OnOBu1pL86S6SQVi91XeOLb3frUWl7FftTS00f13p9bgD'
+
+        intent = stripe.PaymentIntent.create(
+            amount=int(self.cart.final_price * 100),
+            currency='usd',
+            # Verify your integration in this guide by including this parameter
+            metadata={'integration_check': 'accept_a_payment'},
+        )
         categories = Category.objects.get_categories_for_left_sidebar()
         form = OrderForm(request.POST or None)
         context = {
             'cart': self.cart,
             'categories': categories,
-            'form': form
+            'form': form,
+            'client_secret': intent.client_secret
         }
         return render(request, 'checkout.html', context)
 
@@ -156,3 +167,25 @@ class MakeOrderView(CartMixin, View):
             messages.add_message(request, messages.INFO, 'Thank you for the order! Manager will soon contact you.')
             return HttpResponseRedirect('/')
         return HttpResponseRedirect('/checkout/')
+
+
+class PayedOnlineOrderView(CartMixin, View):
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        customer = Customer.objects.get(user=request.user)
+        new_order = Order()
+        new_order.customer = customer
+        new_order.first_name = customer.user.first_name
+        new_order.last_name = customer.user.last_name
+        new_order.phone = customer.phone
+        new_order.address = customer.address
+        new_order.buying_type = Order.BUYING_TYPE_SELF
+        new_order.save()
+        self.cart.in_order = True
+        self.cart.save()
+        new_order.cart = self.cart
+        new_order.status = Order.STATUS_PAYED
+        new_order.save()
+        customer.orders.add(new_order)
+        return JsonResponse({"status": "payed"})

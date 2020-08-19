@@ -196,7 +196,7 @@ class Customer(models.Model):
     user = models.ForeignKey(User, verbose_name="User", on_delete=models.CASCADE)
     phone = models.CharField(max_length=20, verbose_name="Phone number", null=True, blank=True)
     address = models.CharField(max_length=255, null=True, blank=True)
-    orders = models.ManyToManyField('Order', verbose_name='Customer orders', related_name='related_customer')
+    orders = models.ManyToManyField('Order', blank=True, verbose_name='Customer orders', related_name='related_customer')
 
     def __str__(self):
         return "Customer: {} {}".format(self.user.first_name, self.user.last_name)
@@ -207,11 +207,13 @@ class Order(models.Model):
     STATUS_IN_PROGRESS = 'in_progress'
     STATUS_READY = 'ready'
     STATUS_COMPLETED = 'completed'
+    STATUS_PAYED = 'payed'
 
     BUYING_TYPE_SELF = 'self'
     BUYING_TYPE_DELIVERY = 'delivery'
 
     STATUS_CHOICES = (
+        (STATUS_PAYED, 'Order is payed'),
         (STATUS_NEW, 'New order'),
         (STATUS_IN_PROGRESS, 'Order processed'),
         (STATUS_READY, 'Order ready'),
